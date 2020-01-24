@@ -1,0 +1,14 @@
+C:\Users\chris\Downloads\ZaupShop-legacy\ZaupShop-legacy\bin\Release\Libraries\BouncyCastle.Crypto.dll
+C:\Users\chris\Downloads\ZaupShop-legacy\ZaupShop-legacy\bin\Release\Libraries\Google.Protobuf.dll
+C:\Users\chris\Downloads\ZaupShop-legacy\ZaupShop-legacy\bin\Release\Libraries\I18N.dll
+C:\Users\chris\Downloads\ZaupShop-legacy\ZaupShop-legacy\bin\Release\Libraries\I18N.West.dll
+C:\Users\chris\Downloads\ZaupShop-legacy\ZaupShop-legacy\bin\Release\Libraries\MySql.Data.dll
+C:\Users\chris\Downloads\ZaupShop-legacy\ZaupShop-legacy\bin\Release\Libraries\Renci.SshNet.dll
+C:\Users\chris\Downloads\ZaupShop-legacy\ZaupShop-legacy\bin\Release\Libraries\System.Data.dll
+C:\Users\chris\Downloads\ZaupShop-legacy\ZaupShop-legacy\bin\Release\Libraries\System.Management.dll
+C:\Users\chris\Downloads\ZaupShop-legacy\ZaupShop-legacy\bin\Release\Libraries\System.Transactions.dll
+C:\Users\chris\Downloads\ZaupShop-legacy\ZaupShop-legacy\bin\Release\ZaupShop.dll
+C:\Users\chris\Downloads\ZaupShop-legacy\ZaupShop-legacy\bin\Release\ZaupShop.pdb
+C:\Users\chris\Downloads\ZaupShop-legacy\ZaupShop-legacy\obj\Release\ZaupShop.csprojAssemblyReference.cache
+C:\Users\chris\Downloads\ZaupShop-legacy\ZaupShop-legacy\obj\Release\ZaupShop.dll
+C:\Users\chris\Downloads\ZaupShop-legacy\ZaupShop-legacy\obj\Release\ZaupShop.pdb

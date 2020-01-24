@@ -1,301 +1,195 @@
 ﻿using System;
+using fr34kyn01535.Uconomy;
 using I18N.West;
 using MySql.Data.MySqlClient;
-using Rocket.API.Logging;
 using Rocket.Core.Logging;
 
 namespace ZaupShop
 {
     public class DatabaseMgr
     {
-        private readonly ZaupShop _zaupShop;
-        private readonly ILogger _logger;
-
-        // The base code for this class comes from Uconomy itself.
-
-        internal DatabaseMgr(ILogger logger, ZaupShop zaupShop)
+        internal DatabaseMgr()
         {
-            _zaupShop = zaupShop;
-            _logger = logger;
-            CP1250 cP1250 = new CP1250();
+            var cP1250 = new CP1250();
             CheckSchema();
         }
 
-        private void CheckSchema()
+        internal void CheckSchema()
         {
-            try
-            {
-                MySqlConnection mySqlConnection = CreateConnection();
-                MySqlCommand mySqlCommand = mySqlConnection.CreateCommand();
-                mySqlCommand.CommandText = string.Concat("show tables like '", _zaupShop.ConfigurationInstance.ItemShopTableName, "'");
-                mySqlConnection.Open();
-                if (mySqlCommand.ExecuteScalar() == null)
-                {
-                    mySqlCommand.CommandText = string.Concat("CREATE TABLE `", _zaupShop.ConfigurationInstance.ItemShopTableName, "` (`id` int(6) NOT NULL,`itemname` varchar(32) NOT NULL,`cost` decimal(15,2) NOT NULL DEFAULT '20.00',`buyback` decimal(15,2) NOT NULL DEFAULT '0.00',PRIMARY KEY (`id`)) ");
-                    mySqlCommand.ExecuteNonQuery();
-                }
-                mySqlConnection.Close();
-            }
-            catch (Exception exception)
-            {
-                _logger.LogError(null, exception);
-            }
-            try
-            {
-                MySqlConnection mySqlConnection = CreateConnection();
-                MySqlCommand mySqlCommand = mySqlConnection.CreateCommand();
-                mySqlCommand.CommandText = string.Concat("show tables like '", _zaupShop.ConfigurationInstance.VehicleShopTableName, "'");
-                mySqlConnection.Open();
-                if (mySqlCommand.ExecuteScalar() == null)
-                {
-                    mySqlCommand.CommandText = string.Concat("CREATE TABLE `", _zaupShop.ConfigurationInstance.VehicleShopTableName, "` (`id` int(6) NOT NULL,`vehiclename` varchar(32) NOT NULL,`cost` decimal(15,2) NOT NULL DEFAULT '100.00',PRIMARY KEY (`id`)) ");
-                    mySqlCommand.ExecuteNonQuery();
-                }
-                mySqlConnection.Close();
-            }
-            catch (Exception exception)
-            {
-                _logger.LogError(null, exception);
-            }
-            try
-            {
-                MySqlConnection mySqlConnection = CreateConnection();
-                MySqlCommand mySqlCommand = mySqlConnection.CreateCommand();
-                mySqlCommand.CommandText = string.Concat("show columns from `", _zaupShop.ConfigurationInstance.ItemShopTableName, "` like 'buyback'");
-                mySqlConnection.Open();
-                if (mySqlCommand.ExecuteScalar() == null)
-                {
-                    mySqlCommand.CommandText = string.Concat("ALTER TABLE `", _zaupShop.ConfigurationInstance.ItemShopTableName, "` ADD `buyback` decimal(15,2) NOT NULL DEFAULT '0.00'");
-                    mySqlCommand.ExecuteNonQuery();
-                }
-                mySqlConnection.Close();
-            }
-            catch (Exception exception)
-            {
-                _logger.LogError(null, exception);
-            }
+            var res = ExecuteQuery(true,
+                $"show tables like '{ZaupShop.Instance.Configuration.Instance.ItemShopTableName}'");
+
+            if (res == null)
+                ExecuteQuery(false,
+                    $"CREATE TABLE `{ZaupShop.Instance.Configuration.Instance.ItemShopTableName}` (`id` int(6) NOT NULL,`itemname` varchar(32) NOT NULL,`cost` decimal(15,2) NOT NULL DEFAULT '20.00',`buyback` decimal(15,2) NOT NULL DEFAULT '0.00',PRIMARY KEY (`id`))");
+
+            res = ExecuteQuery(true,
+                $"show tables like '{ZaupShop.Instance.Configuration.Instance.VehicleShopTableName}'");
+
+            if (res == null)
+                ExecuteQuery(false,
+                    $"CREATE TABLE `{ZaupShop.Instance.Configuration.Instance.VehicleShopTableName}` (`id` int(6) NOT NULL,`vehiclename` varchar(32) NOT NULL,`cost` decimal(15,2) NOT NULL DEFAULT '100.00',PRIMARY KEY (`id`))");
+
+            res = ExecuteQuery(true,
+                $"show columns from `{ZaupShop.Instance.Configuration.Instance.ItemShopTableName}` like 'buyback'");
+
+            if (res == null)
+                ExecuteQuery(false,
+                    $"ALTER TABLE `{ZaupShop.Instance.Configuration.Instance.ItemShopTableName}` ADD `buyback` decimal(15,2) NOT NULL DEFAULT '0.00'");
         }
 
-        public MySqlConnection CreateConnection()
+        private MySqlConnection CreateConnection()
         {
             MySqlConnection mySqlConnection = null;
             try
             {
-                if (_zaupShop.ConfigurationInstance.DatabasePort == 0)
-                {
-                    _zaupShop.ConfigurationInstance.DatabasePort = 3306;
-                    _zaupShop.SaveConfiguration();
-                }
-                mySqlConnection = new MySqlConnection(string.Format("SERVER={0};DATABASE={1};UID={2};PASSWORD={3};PORT={4};", _zaupShop.ConfigurationInstance.DatabaseAddress, _zaupShop.ConfigurationInstance.DatabaseName, _zaupShop.ConfigurationInstance.DatabaseUsername, _zaupShop.ConfigurationInstance.DatabasePassword, _zaupShop.ConfigurationInstance.DatabasePort));
+                if (Uconomy.Instance.Configuration.Instance.DatabasePort == 0)
+                    Uconomy.Instance.Configuration.Instance.DatabasePort = 3306;
+                mySqlConnection = new MySqlConnection(
+                    $"SERVER={Uconomy.Instance.Configuration.Instance.DatabaseAddress};DATABASE={Uconomy.Instance.Configuration.Instance.DatabaseName};UID={Uconomy.Instance.Configuration.Instance.DatabaseUsername};PASSWORD={Uconomy.Instance.Configuration.Instance.DatabasePassword};PORT={Uconomy.Instance.Configuration.Instance.DatabasePort};");
             }
             catch (Exception exception)
             {
-                _logger.LogError(null, exception);
+                Logger.LogException(exception);
             }
+
             return mySqlConnection;
         }
 
         public bool AddItem(int id, string name, decimal cost, bool change)
         {
-            try
-            {
-                MySqlConnection mySqlConnection = CreateConnection();
-                MySqlCommand mySqlCommand = mySqlConnection.CreateCommand();
-                if (!change)
-                {
-                    mySqlCommand.CommandText = string.Concat("Insert into `", _zaupShop.ConfigurationInstance.ItemShopTableName, "` (`id`, `itemname`, `cost`) VALUES ('", id.ToString(), "', '", name, "', '", cost.ToString(), "');");
-                }
-                else
-                {
-                    mySqlCommand.CommandText = string.Concat("update `", _zaupShop.ConfigurationInstance.ItemShopTableName, "` set itemname='", name, "', cost='", cost.ToString(), "' where id='", id.ToString(), "';");
-                }
-                mySqlConnection.Open();
-                int affected = mySqlCommand.ExecuteNonQuery();
-                mySqlConnection.Close();
-                if (affected > 0)
-                {
-                    return true;
-                }
+            var affected = ExecuteQuery(false,
+                change
+                    ? $"update `{ZaupShop.Instance.Configuration.Instance.ItemShopTableName}` set itemname=@name, cost='{cost}' where id='{id}';"
+                    : $"Insert into `{ZaupShop.Instance.Configuration.Instance.ItemShopTableName}` (`id`, `itemname`, `cost`) VALUES ('{id}', @name, '{cost}');",
+                new MySqlParameter("@name", name));
 
-                return false;
-            }
-            catch (Exception exception)
-            {
-                _logger.LogError(null, exception);
-                return false;
-            }
+            if (affected == null) return false;
+
+            int.TryParse(affected.ToString(), out var rows);
+
+            return rows > 0;
         }
 
         public bool AddVehicle(int id, string name, decimal cost, bool change)
         {
-            try
-            {
-                MySqlConnection mySqlConnection = CreateConnection();
-                MySqlCommand mySqlCommand = mySqlConnection.CreateCommand();
-                if (!change)
-                {
-                    mySqlCommand.CommandText = string.Concat("Insert into `", _zaupShop.ConfigurationInstance.VehicleShopTableName, "` (`id`, `vehiclename`, `cost`) VALUES ('", id.ToString(), "', '", name, "', '", cost.ToString(), "');");
-                }
-                else
-                {
-                    mySqlCommand.CommandText = string.Concat("update `", _zaupShop.ConfigurationInstance.VehicleShopTableName, "` set vehiclename='", name, "', cost='", cost.ToString(), "' where id='", id.ToString(), "';");
-                }
-                mySqlConnection.Open();
-                int affected = mySqlCommand.ExecuteNonQuery();
-                mySqlConnection.Close();
-                if (affected > 0)
-                {
-                    return true;
-                }
+            var affected = ExecuteQuery(false,
+                change
+                    ? $"update `{ZaupShop.Instance.Configuration.Instance.VehicleShopTableName}` set vehiclename=@name, cost='{cost}' where id='{id}';"
+                    : $"Insert into `{ZaupShop.Instance.Configuration.Instance.VehicleShopTableName}` (`id`, `vehiclename`, `cost`) VALUES ('{id}', @name, '{cost}');",
+                new MySqlParameter("@name", name));
 
-                return false;
-            }
-            catch (Exception exception)
-            {
-                _logger.LogError(null, exception);
-                return false;
-            }
+            if (affected == null) return false;
+
+            int.TryParse(affected.ToString(), out var rows);
+
+            return rows > 0;
         }
 
         public decimal GetItemCost(int id)
         {
-            decimal num = new decimal(0);
-            try
-            {
-                MySqlConnection mySqlConnection = CreateConnection();
-                MySqlCommand mySqlCommand = mySqlConnection.CreateCommand();
-                mySqlCommand.CommandText = string.Concat("select `cost` from `", _zaupShop.ConfigurationInstance.ItemShopTableName, "` where `id` = '", id.ToString(), "';");
-                mySqlConnection.Open();
-                object obj = mySqlCommand.ExecuteScalar();
-                if (obj != null)
-                {
-                    decimal.TryParse(obj.ToString(), out num);
-                }
-                mySqlConnection.Close();
-            }
-            catch (Exception exception)
-            {
-                _logger.LogError(null, exception);
-            }
+            var num = new decimal(0);
+            var obj = ExecuteQuery(true,
+                $"select `cost` from `{ZaupShop.Instance.Configuration.Instance.ItemShopTableName}` where `id` = '{id}';");
+
+            if (obj != null) decimal.TryParse(obj.ToString(), out num);
+
             return num;
         }
 
         public decimal GetVehicleCost(int id)
         {
-            decimal num = new decimal(0);
-            try
-            {
-                MySqlConnection mySqlConnection = CreateConnection();
-                MySqlCommand mySqlCommand = mySqlConnection.CreateCommand();
-                mySqlCommand.CommandText = string.Concat("select `cost` from `", _zaupShop.ConfigurationInstance.VehicleShopTableName, "` where `id` = '", id.ToString(), "';");
-                mySqlConnection.Open();
-                object obj = mySqlCommand.ExecuteScalar();
-                if (obj != null)
-                {
-                    decimal.TryParse(obj.ToString(), out num);
-                }
-                mySqlConnection.Close();
-            }
-            catch (Exception exception)
-            {
-                _logger.LogError(null, exception);
-            }
+            var num = new decimal(0);
+            var obj = ExecuteQuery(true,
+                $"select `cost` from `{ZaupShop.Instance.Configuration.Instance.VehicleShopTableName}` where `id` = '{id}';");
+
+            if (obj != null) decimal.TryParse(obj.ToString(), out num);
+
             return num;
         }
 
         public bool DeleteItem(int id)
         {
-            try
-            {
-                MySqlConnection mySqlConnection = CreateConnection();
-                MySqlCommand mySqlCommand = mySqlConnection.CreateCommand();
-                mySqlCommand.CommandText = string.Concat("delete from `", _zaupShop.ConfigurationInstance.ItemShopTableName, "` where id='", id.ToString(), "';");
-                mySqlConnection.Open();
-                int affected = mySqlCommand.ExecuteNonQuery();
-                mySqlConnection.Close();
-                if (affected > 0)
-                {
-                    return true;
-                }
+            var affected = ExecuteQuery(false,
+                $"delete from `{ZaupShop.Instance.Configuration.Instance.ItemShopTableName}` where id='{id}';");
 
-                return false;
-            }
-            catch (Exception exception)
-            {
-                _logger.LogError(null, exception);
-                return false;
-            }
+            if (affected == null) return false;
+
+            int.TryParse(affected.ToString(), out var rows);
+
+            return rows > 0;
         }
 
         public bool DeleteVehicle(int id)
         {
-            try
-            {
-                MySqlConnection mySqlConnection = CreateConnection();
-                MySqlCommand mySqlCommand = mySqlConnection.CreateCommand();
-                mySqlCommand.CommandText = string.Concat("delete from `", _zaupShop.ConfigurationInstance.VehicleShopTableName, "` where id='", id.ToString(), "';");
-                mySqlConnection.Open();
-                int affected = mySqlCommand.ExecuteNonQuery();
-                mySqlConnection.Close();
-                if (affected > 0)
-                {
-                    return true;
-                }
+            var affected = ExecuteQuery(false,
+                $"delete from `{ZaupShop.Instance.Configuration.Instance.VehicleShopTableName}` where id='{id}';");
 
-                return false;
-            }
-            catch (Exception exception)
-            {
-                _logger.LogError(null, exception);
-                return false;
-            }
+            if (affected == null) return false;
+
+            int.TryParse(affected.ToString(), out var rows);
+
+            return rows > 0;
         }
 
         public bool SetBuyPrice(int id, decimal cost)
         {
-            try
-            {
-                MySqlConnection mySqlConnection = CreateConnection();
-                MySqlCommand mySqlCommand = mySqlConnection.CreateCommand();
-                mySqlCommand.CommandText = string.Concat("update `", _zaupShop.ConfigurationInstance.ItemShopTableName, "` set `buyback`='", cost.ToString(), "' where id='", id.ToString(), "';");
-                mySqlConnection.Open();
-                int affected = mySqlCommand.ExecuteNonQuery();
-                mySqlConnection.Close();
-                if (affected > 0)
-                {
-                    return true;
-                }
+            var affected = ExecuteQuery(false,
+                $"update `{ZaupShop.Instance.Configuration.Instance.ItemShopTableName}` set `buyback`='{cost}' where id='{id}';");
 
-                return false;
-            }
-            catch (Exception exception)
-            {
-                _logger.LogError(null, exception);
-                return false;
-            }
+            if (affected == null) return false;
+
+            int.TryParse(affected.ToString(), out var rows);
+
+            return rows > 0;
         }
 
         public decimal GetItemBuyPrice(int id)
         {
-            decimal num = new decimal(0);
-            try
-            {
-                MySqlConnection mySqlConnection = CreateConnection();
-                MySqlCommand mySqlCommand = mySqlConnection.CreateCommand();
-                mySqlCommand.CommandText = string.Concat("select `buyback` from `", _zaupShop.ConfigurationInstance.ItemShopTableName, "` where `id` = '", id.ToString(), "';");
-                mySqlConnection.Open();
-                object obj = mySqlCommand.ExecuteScalar();
-                if (obj != null)
-                {
-                    decimal.TryParse(obj.ToString(), out num);
-                }
-                mySqlConnection.Close();
-            }
-            catch (Exception exception)
-            {
-                _logger.LogError(null, exception);
-            }
+            var num = new decimal(0);
+            var obj = ExecuteQuery(true,
+                $"select `buyback` from `{ZaupShop.Instance.Configuration.Instance.ItemShopTableName}` where `id` = '{id}';");
+
+            if (obj != null) decimal.TryParse(obj.ToString(), out num);
+
             return num;
+        }
+
+        /// <summary>
+        /// Executes a MySql query.
+        /// </summary>
+        /// <param name="isScalar">If the query is expected to return a value.</param>
+        /// <param name="query">The query to execute.</param>
+        /// <param name="parameters">The MySqlParameters to be added to the command.</param>
+        /// <returns>The value if isScalar is true, null otherwise.</returns>
+        public object ExecuteQuery(bool isScalar, string query, params MySqlParameter[] parameters)
+        {
+            object result = null;
+
+            using (var connection = CreateConnection())
+            {
+                try
+                {
+                    var command = connection.CreateCommand();
+                    command.CommandText = query;
+
+                    foreach (var parameter in parameters)
+                        command.Parameters.Add(parameter);
+
+                    connection.Open();
+                    result = isScalar ? command.ExecuteScalar() : command.ExecuteNonQuery();
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogException(ex);
+                }
+                finally
+                {
+                    connection.Close();
+                }
+            }
+
+            return result;
         }
     }
 }
