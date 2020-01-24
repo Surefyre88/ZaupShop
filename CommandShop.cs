@@ -1,201 +1,297 @@
-﻿using System;
-using System.Runtime.Remoting.Messaging;
-using Rocket.API.Commands;
-using Rocket.API.Plugins;
-using Rocket.Core.Commands;
-using Rocket.Core.I18N;
-using Rocket.Core.Plugins;
+﻿using System.Collections.Generic;
+using Rocket.API;
+using Rocket.Core.Logging;
+using Rocket.Unturned.Chat;
+using Rocket.Unturned.Player;
 using SDG.Unturned;
 
 namespace ZaupShop
 {
-    public class CommandShop : ICommand
+    public class CommandShop : IRocketCommand
     {
-        private readonly ZaupShop _parentPlugin;
+        public AllowedCaller AllowedCaller => AllowedCaller.Both;
 
-        public CommandShop(IPlugin plugin)
-        {
-            _parentPlugin = (ZaupShop)plugin;
-        }
         public string Name => "shop";
-        public string Summary => "Allows admins to change, add, or remove items/vehicles from the shop.";
-        public string Description => null;
-        public string Permission => null;
+
+        public string Help => "Allows admins to change, add, or remove items/vehicles from the shop.";
+
         public string Syntax => "<add | rem | chng | buy> [v.]<itemid> <cost>";
-        public IChildCommand[] ChildCommands => null;
-        public string[] Aliases => null;
-        public string Permissions => "shop";
 
-        public bool SupportsUser(Type user)
+        public List<string> Aliases => new List<string>();
+
+        public List<string> Permissions => new List<string> {"shop.*", "shop.add", "shop.rem", "shop.chng", "shop.buy"};
+
+        public void Execute(IRocketPlayer caller, string[] msg)
         {
-            return true;
-        }
+            var console = caller is ConsolePlayer;
+            string[] permnames = {"shop.*", "shop.add", "shop.rem", "shop.chng", "shop.buy"};
+            bool[] perms = {false, false, false, false, false};
+            var anyuse = false;
+            string message;
+            foreach (var s in caller.GetPermissions())
+                switch (s.Name)
+                {
+                    case "shop.*":
+                        perms[0] = true;
+                        anyuse = true;
+                        break;
+                    case "shop.add":
+                        perms[1] = true;
+                        anyuse = true;
+                        break;
+                    case "shop.rem":
+                        perms[2] = true;
+                        anyuse = true;
+                        break;
+                    case "shop.chng":
+                        perms[3] = true;
+                        anyuse = true;
+                        break;
+                    case "shop.buy":
+                        perms[4] = true;
+                        anyuse = true;
+                        break;
+                    case "*":
+                        perms[0] = true;
+                        perms[1] = true;
+                        perms[2] = true;
+                        perms[3] = true;
+                        perms[4] = true;
+                        anyuse = true;
+                        break;
+                }
 
-        public void Execute(ICommandContext context)
-        {
-            var parameters = context.Parameters;
-            if (parameters.Length == 0)
+            if (console || ((UnturnedPlayer) caller).IsAdmin)
             {
-                throw new CommandWrongUsageException();
-            }
-            if (parameters.Length < 2)
-            {
-                throw new CommandWrongUsageException(_parentPlugin.Translations.Get("no_itemid_given"));
-            }
-            if (parameters.Length == 2 && parameters[0] != "rem")
-            {
-                throw new CommandWrongUsageException(_parentPlugin.Translations.Get("no_cost_given"));
+                perms[0] = true;
+                perms[1] = true;
+                perms[2] = true;
+                perms[3] = true;
+                perms[4] = true;
+                anyuse = true;
             }
 
-            if (parameters.Length >= 2)
+            if (!anyuse)
             {
-                string[] type = Parser.getComponentsFromSerial(parameters[1], '.');
+                // Assume this is a player
+                UnturnedChat.Say(caller, "You don't have permission to use the /shop command.");
+                return;
+            }
+
+            if (msg.Length == 0)
+            {
+                message = ZaupShop.Instance.Translate("shop_command_usage");
+                // We are going to print how to use
+                SendMessage(caller, message, console);
+                return;
+            }
+
+            if (msg.Length < 2)
+            {
+                message = ZaupShop.Instance.Translate("no_itemid_given");
+                SendMessage(caller, message, console);
+                return;
+            }
+
+            if (msg.Length == 2 && msg[0] != "rem")
+            {
+                message = ZaupShop.Instance.Translate("no_cost_given");
+                SendMessage(caller, message, console);
+            }
+            else if (msg.Length >= 2)
+            {
+                var type = Parser.getComponentsFromSerial(msg[1], '.');
                 if (type.Length > 1 && type[0] != "v")
                 {
-                    throw new CommandWrongUsageException(_parentPlugin.Translations.Get("v_not_provided"));
+                    message = ZaupShop.Instance.Translate("v_not_provided");
+                    SendMessage(caller, message, console);
+                    return;
                 }
+
                 ushort id;
                 if (type.Length > 1)
                 {
                     if (!ushort.TryParse(type[1], out id))
                     {
-                        throw new CommandWrongUsageException(_parentPlugin.Translations.Get("invalid_id_given"));
+                        message = ZaupShop.Instance.Translate("invalid_id_given");
+                        SendMessage(caller, message, console);
+                        return;
                     }
                 }
                 else
                 {
                     if (!ushort.TryParse(type[0], out id))
                     {
-                        throw new CommandWrongUsageException(_parentPlugin.Translations.Get("invalid_id_given"));
+                        message = ZaupShop.Instance.Translate("invalid_id_given");
+                        SendMessage(caller, message, console);
+                        return;
                     }
                 }
+
                 // All basic checks complete.  Let's get down to business.
-                bool success = false;
-                bool change = false;
-                bool pass = false;
-                switch (parameters[0])
+                var success = false;
+                var change = false;
+                var pass = false;
+                switch (msg[0])
                 {
                     case "chng":
+                        if (!perms[3] && !perms[0])
+                        {
+                            message = ZaupShop.Instance.Translate("no_permission_shop_chng");
+                            SendMessage(caller, message, console);
+                            return;
+                        }
+
                         change = true;
                         pass = true;
                         goto case "add";
                     case "add":
-                        string ac = (pass) ? _parentPlugin.Translations.Get("changed") : _parentPlugin.Translations.Get("added");
+                        if (!pass)
+                            if (!perms[1] && !perms[0])
+                            {
+                                message = ZaupShop.Instance.Translate("no_permission_shop_add");
+                                SendMessage(caller, message, console);
+                                return;
+                            }
+
+                        var ac = pass
+                            ? ZaupShop.Instance.Translate("changed")
+                            : ZaupShop.Instance.Translate("added");
                         switch (type[0])
                         {
                             case "v":
                                 if (!IsAsset(id, "v"))
                                 {
-                                    throw new CommandWrongUsageException(_parentPlugin.Translations.Get("invalid_id_given"));
-                                }
-                                VehicleAsset va = (VehicleAsset)Assets.find(EAssetType.VEHICLE, id);
-                                success = _parentPlugin.Database.AddVehicle(id, va.vehicleName, decimal.Parse(parameters[2]), change);
-                                if (!success)
-                                {
-                                    context.User.SendLocalizedMessage(_parentPlugin.Translations, "error_adding_or_changing", va.vehicleName);
+                                    message = ZaupShop.Instance.Translate("invalid_id_given");
+                                    SendMessage(caller, message, console);
                                     return;
                                 }
-                                context.User.SendLocalizedMessage(_parentPlugin.Translations, "changed_or_added_to_shop", ac, va.vehicleName, parameters[2]);
+
+                                var va = (VehicleAsset) Assets.find(EAssetType.VEHICLE, id);
+                                message = ZaupShop.Instance.Translate("changed_or_added_to_shop", ac, va.vehicleName,
+                                    msg[2]);
+                                success = ZaupShop.Instance.ShopDB.AddVehicle(id, va.vehicleName,
+                                    decimal.Parse(msg[2]), change);
+                                if (!success)
+                                    message = ZaupShop.Instance.Translate("error_adding_or_changing", va.vehicleName);
+                                SendMessage(caller, message, console);
                                 break;
                             default:
                                 if (!IsAsset(id, "i"))
                                 {
-                                    throw new CommandWrongUsageException(_parentPlugin.Translations.Get("invalid_id_given"));
-                                }
-
-                                ItemAsset ia = (ItemAsset)Assets.find(EAssetType.ITEM, id);
-                                success = _parentPlugin.Database.AddItem(id, ia.itemName, decimal.Parse(parameters[2]), change);
-                                if (!success)
-                                {
-                                    context.User.SendLocalizedMessage(_parentPlugin.Translations, "error_adding_or_changing", ia.itemName);
+                                    message = ZaupShop.Instance.Translate("invalid_id_given");
+                                    SendMessage(caller, message, console);
                                     return;
                                 }
 
-                                context.User.SendLocalizedMessage(_parentPlugin.Translations, "changed_or_added_to_shop", ac, ia.itemName, parameters[2]);
+                                var ia = (ItemAsset) Assets.find(EAssetType.ITEM, id);
+                                message = ZaupShop.Instance.Translate("changed_or_added_to_shop", ac, ia.itemName,
+                                    msg[2]);
+                                success = ZaupShop.Instance.ShopDB.AddItem(id, ia.itemName, decimal.Parse(msg[2]),
+                                    change);
+                                if (!success)
+                                    message = ZaupShop.Instance.Translate("error_adding_or_changing", ia.itemName);
+                                SendMessage(caller, message, console);
                                 break;
                         }
+
                         break;
                     case "rem":
+                        if (!perms[2] && !perms[0])
+                        {
+                            message = ZaupShop.Instance.Translate("no_permission_shop_rem");
+                            SendMessage(caller, message, console);
+                            return;
+                        }
+
                         switch (type[0])
                         {
                             case "v":
-                                if (!IsAsset(id, "i"))
+                                if (!IsAsset(id, "v"))
                                 {
-                                    throw new CommandWrongUsageException(_parentPlugin.Translations.Get("invalid_id_given"));
-                                }
-
-                                VehicleAsset va = (VehicleAsset)Assets.find(EAssetType.VEHICLE, id);
-                                success = _parentPlugin.Database.DeleteVehicle(id);
-                                if (!success)
-                                {
-                                    context.User.SendLocalizedMessage(_parentPlugin.Translations, "not_in_shop_to_remove", va.vehicleName);
+                                    message = ZaupShop.Instance.Translate("invalid_id_given");
+                                    SendMessage(caller, message, console);
                                     return;
                                 }
 
-                                context.User.SendLocalizedMessage(_parentPlugin.Translations, "removed_from_shop", va.vehicleName);
+                                var va = (VehicleAsset) Assets.find(EAssetType.VEHICLE, id);
+                                message = ZaupShop.Instance.Translate("removed_from_shop", va.vehicleName);
+                                success = ZaupShop.Instance.ShopDB.DeleteVehicle(id);
+                                if (!success)
+                                    message = ZaupShop.Instance.Translate("not_in_shop_to_remove", va.vehicleName);
+                                SendMessage(caller, message, console);
                                 break;
                             default:
                                 if (!IsAsset(id, "i"))
                                 {
-                                    throw new CommandWrongUsageException(_parentPlugin.Translations.Get("invalid_id_given"));
-                                }
-
-                                ItemAsset ia = (ItemAsset)Assets.find(EAssetType.ITEM, id);
-                                success = _parentPlugin.Database.DeleteItem(id);
-                                if (!success)
-                                {
-                                    context.User.SendLocalizedMessage(_parentPlugin.Translations, "not_in_shop_to_remove", ia.itemName);
+                                    message = ZaupShop.Instance.Translate("invalid_id_given");
+                                    SendMessage(caller, message, console);
                                     return;
                                 }
 
-                                context.User.SendLocalizedMessage(_parentPlugin.Translations, "removed_from_shop", ia.itemName);
+                                var ia = (ItemAsset) Assets.find(EAssetType.ITEM, id);
+                                message = ZaupShop.Instance.Translate("removed_from_shop", ia.itemName);
+                                success = ZaupShop.Instance.ShopDB.DeleteItem(id);
+                                if (!success)
+                                    message = ZaupShop.Instance.Translate("not_in_shop_to_remove", ia.itemName);
+                                SendMessage(caller, message, console);
                                 break;
                         }
+
                         break;
                     case "buy":
+                        if (!perms[4] && !perms[0])
+                        {
+                            message = ZaupShop.Instance.Translate("no_permission_shop_buy");
+                            SendMessage(caller, message, console);
+                            return;
+                        }
+
                         if (!IsAsset(id, "i"))
                         {
-                            throw new CommandWrongUsageException(_parentPlugin.Translations.Get("invalid_id_given"));
+                            message = ZaupShop.Instance.Translate("invalid_id_given");
+                            SendMessage(caller, message, console);
+                            return;
                         }
-                        ItemAsset iab = (ItemAsset)Assets.find(EAssetType.ITEM, id);
 
-                        var buyb = parameters.Get<decimal>(2);
-                        success = _parentPlugin.Database.SetBuyPrice(id, buyb);
+                        var iab = (ItemAsset) Assets.find(EAssetType.ITEM, id);
+                        decimal.TryParse(msg[2], out var buyb);
+                        message = ZaupShop.Instance.Translate("set_buyback_price", iab.itemName, buyb.ToString());
+                        success = ZaupShop.Instance.ShopDB.SetBuyPrice(id, buyb);
                         if (!success)
-                        {
-                            context.User.SendLocalizedMessage(_parentPlugin.Translations, "not_in_shop_to_buyback", iab.itemName);
-                            break;
-                        }
-
-                        context.User.SendLocalizedMessage(_parentPlugin.Translations, "set_buyback_price", iab.itemName, buyb.ToString());
+                            message = ZaupShop.Instance.Translate("not_in_shop_to_buyback", iab.itemName);
+                        SendMessage(caller, message, console);
                         break;
                     default:
                         // We shouldn't get this, but if we do send an error.
-                        context.User.SendLocalizedMessage(_parentPlugin.Translations, "not_in_shop_to_remove");
+                        message = ZaupShop.Instance.Translate("not_in_shop_to_remove");
+
+                        SendMessage(caller, message, console);
                         return;
                 }
             }
         }
+
         private bool IsAsset(ushort id, string type)
         {
             // Check for valid Item/Vehicle Id.
             switch (type)
             {
                 case "i":
-                    if (Assets.find(EAssetType.ITEM, id) != null)
-                    {
-                        return true;
-                    }
-                    return false;
+                    return Assets.find(EAssetType.ITEM, id) != null;
                 case "v":
-                    if (Assets.find(EAssetType.VEHICLE, id) != null)
-                    {
-                        return true;
-                    }
-                    return false;
+                    return Assets.find(EAssetType.VEHICLE, id) != null;
                 default:
                     return false;
             }
+        }
+
+        private void SendMessage(IRocketPlayer caller, string message, bool console)
+        {
+            if (console)
+                Logger.Log(message);
+            else
+                UnturnedChat.Say(caller, message);
         }
     }
 }
